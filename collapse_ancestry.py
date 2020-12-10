@@ -20,7 +20,8 @@ def parse_args():
                     help='comma-separated list of population labels in the order of rfmix populations (1 first, 2 second, and so on). Used in bed files and karyogram labels')
   parser.add_argument('--chrX', help='include chrX?', default=False, action="store_true")
   parser.add_argument('--out', help='prefix to bed file, _A.bed and _B.bed will be appended', required=True)
-  
+  parser.add_argument('--X_only', help='collapse ancestry on chromosome X only', default=False)
+
   args = parser.parse_args()
   return(args)
   
@@ -133,8 +134,11 @@ if __name__ == '__main__':
     raise Exception('Individual is not in the list provided')
   
   #set up chromosome variables
-  chrs = range(1,23)
-  if args.chrX:
+  if args.X_only is False:
+    chrs = range(1,23)
+  else:
+    chrs = ['X']
+  if args.chrX and args.X_only is False:
     chrs.append('X')
   
   print 'Starting [' + datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + ']'

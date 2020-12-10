@@ -34,7 +34,7 @@ def fill_genos(hap, pos_id):
     return(genos, pos_id)
 
 
-def find_indices(keep_set, shapeit_sample, out_sample):
+def find_indices(keep_set, shapeit_sample, out_sample, male_set=None):
     """
     get indices corresponding with reference individuals to keep
     note: index order corresponds with the input keep file.
@@ -51,7 +51,10 @@ def find_indices(keep_set, shapeit_sample, out_sample):
         ind_order.append(myLine[1])
     for ind in keep_set:
         if ind in ind_order:
-            indices.extend([5+2*ind_order.index(ind), 6+2*ind_order.index(ind)])
+            if male_set is not None and ind in male_set:
+                indices.extend([5 + 2 * ind_order.index(ind), ])
+            else:
+                indices.extend([5+2*ind_order.index(ind), 6+2*ind_order.index(ind)])
             out_sample.write(ind + '\n')
     return indices
 
@@ -63,7 +66,11 @@ def get_haps(shapeit_hap, indices, full_intersection):
     for line in shapeit_hap:
         myLine = line.strip().split()
         if int(myLine[2]) in full_intersection:
-            hap_dict[int(myLine[2])] = [myLine[i] for i in indices] #this is the problematic line for the admixed groups
+            try:
+                hap_dict[int(myLine[2])] = [myLine[i] for i in indices] #this is the problematic line for the admixed groups
+            except IndexError:
+                print "i=", i
+                raise
     return hap_dict
 
 def write_or_flip(snp_alleles, snp_haps, allele_order, file):
@@ -110,6 +117,15 @@ def main(args):
     
     ref_haps = args.shapeit_hap_ref.split(',')
     ref_samples = args.shapeit_sample_ref.split(',')
+
+    # see which sample is male
+    if args.chr is not "X" and (args.hap_X is not None):
+        raise RuntimeError('--hap_X is valid only for chromosome X')
+    elif args.chr == "X" and (args.hap_X is not None):
+        male_list = open(args.hap_X)
+        male_set = []
+        for line in male_list:
+            male_set.append(line.strip())
     
     #fill sites and genos variables with info from each shapeit file
     print 'Filling sites and genos from shapeit haps files [' + datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + ']'
@@ -127,10 +143,13 @@ def main(args):
     
     sample_indices = []
     sample_admixed_indices = []
-    for sample in ref_samples:
-        sample_indices.append(find_indices(ref_set, open_shapeit(sample), out_sample))
     if args.admixed_keep is not None:
         sample_admixed_indices = find_indices(admixed_set, open_shapeit(args.shapeit_sample_admixed), out_sample)
+    for sample in ref_samples:
+        if args.chr == "X" and (args.hap_X is not None):
+            sample_indices.append(find_indices(ref_set, open_shapeit(sample), out_sample, male_set))
+        else:
+            sample_indices.append(find_indices(ref_set, open_shapeit(sample), out_sample))
     
     #get intersection between all reference panel and admixed sites
     print 'Getting intersection between reference and admixed sites [' + datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + ']'
@@ -194,9 +213,6 @@ def main(args):
         my_map.write(str(snp) + '\t' + str(pos_gen_map[snp]) + '\t' + pos_id[snp] + '\n')
     
     print 'Writing classes file [' + datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + ']'
-    for index in range(len(sample_indices)):
-        for i in sample_indices[index]:
-            classes.write(str(index + 1) + ' ')
 
     if args.admixed_keep is None:
         for ind in admixed_set: ###changed this quite a bit, make sure it's ok
@@ -204,15 +220,20 @@ def main(args):
     else:
         for hap in range(len(sample_admixed_indices)):
             classes.write('0 ')
+
+    for index in range(len(sample_indices)):
+        for i in sample_indices[index]:
+            classes.write(str(index + 1) + ' ')
+
     classes.write('\n')
     
     
     #dicts mapping position -> haplotype
     print 'Getting haplotypes of interest [' + datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + ']'
     all_haps = [] ######check that this is ok
+    all_haps.append(get_haps(open_shapeit(args.shapeit_hap_admixed), sample_admixed_indices, full_intersection))
     for i,hap in enumerate(ref_haps): # open all haps files
         all_haps.append(get_haps(open_shapeit(hap), sample_indices[i], full_intersection))
-    all_haps.append(get_haps(open_shapeit(args.shapeit_hap_admixed), sample_admixed_indices, full_intersection))
     
     #checks that the intersection of ref_keep and ref_sample + admixed_keep and admixed_sample is equal to the number of haplotypes I will print
     assert sum([len(x[intersection_ordered[0]]) for x in all_haps]) == sum([len(x) for x in sample_indices]) + len(sample_admixed_indices)
@@ -258,6 +279,8 @@ if __name__ == '__main__':
     
     parser.add_argument('--genetic_map', help='3 column file: physical position, recombination rate, genetic position', required=True)
     parser.add_argument('--out', required=True)
+
+    parser.add_argument('--hap_X', help='chromosome X of male samples indicated in the list will be treated as haploid')
 
     args = parser.parse_args()
     main(args)

@@ -14,7 +14,13 @@ def read_ref(anc):
 
 def main(args):
     ref = args.ref.strip().split(',')
-    
+
+    if args.hap_X is not None:
+        male_list = open(args.hap_X)
+        male_set = []
+        for line in male_list:
+            male_set.append(line.strip())
+
     ancs = []
     for anc in ref:
         ancs.append(read_ref(anc))
@@ -31,7 +37,10 @@ def main(args):
         for anc in range(len(ancs)):
             in_ref = in_ref + int(line in ancs[anc])
             if line in ancs[anc]:
-                out.write(str(anc + 1) + ' ' + str(anc + 1) + ' ')
+                if args.hap_X and line in male_set:
+                    out.write(str(anc + 1) + ' ')
+                else:
+                    out.write(str(anc + 1) + ' ' + str(anc + 1) + ' ')
 
         if in_ref == 0:
             out.write('0 0 ')
@@ -44,6 +53,7 @@ if __name__ == '__main__':
     parser.add_argument('--ref', required=True)
     parser.add_argument('--sample', required=True)
     parser.add_argument('--out', required=True)
+    parser.add_argument('--hap_X', help='chromosome X of male samples indicated in the list will be treated as haploid')
     
     args = parser.parse_args()
 
